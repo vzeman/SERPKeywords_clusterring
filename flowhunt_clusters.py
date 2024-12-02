@@ -9,7 +9,8 @@ source = []
 target = []
 weight = []
 
-api_key = st.text_input(label="FlowHunt API Key")
+with st.sidebar:
+    api_key = st.text_input(label="FlowHunt API Key")
 
 if api_key and len(api_key) == 36:
     # Configure Bearer authorization: HTTPBearer
@@ -30,12 +31,12 @@ if api_key and len(api_key) == 36:
         except Exception as e:
             pass
             #print("Exception when calling SERPApi->search_cluster_group: %s\n" % e)
-
-    selected_group = st.selectbox(
-        label="select group id",
-        options=[group.group_name for group in groups],
-        index=None
-    )
+    with st.sidebar:
+        selected_group = st.selectbox(
+            label="select group id",
+            options=[group.group_name for group in groups],
+            index=None
+        )
 
     if selected_group:
         group_id = [group.group_id for group in groups if group.group_name == selected_group][0]
