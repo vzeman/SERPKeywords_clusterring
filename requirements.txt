@@ -1,2 +1,2 @@
-d3graph
 streamlit
+streamlit-d3graph
