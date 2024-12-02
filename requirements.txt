@@ -1,3 +1,4 @@
 streamlit
 streamlit-d3graph
 git+https://github.com/QualityUnit/flowhunt-python-sdk.git
+scikit-learn
