@@ -47,8 +47,8 @@ if api_key and len(api_key) == 36:
             if q_intersections.status == "SUCCESS":
                 intersections = json.loads(q_intersections.result)
                 for g in intersections:
-                    if g.group_id == group_id:
-                        for i in g.queries:
+                    if g["group_id"] == group_id:
+                        for i in g["queries"]:
                             source.append(q.query)
                             target.append(i["query"])
                             weight.append(i["count"])
