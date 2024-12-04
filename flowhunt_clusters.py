@@ -8,7 +8,7 @@ import json
 source = []
 target = []
 weight = []
-
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 with st.sidebar:
     api_key = st.text_input(label="FlowHunt API Key")
 
@@ -58,5 +58,6 @@ if api_key and len(api_key) == 36:
         # Initialize
         d3 = d3graph()
         d3.graph(adjmat)
-        d3.show()
+
+        d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
 
