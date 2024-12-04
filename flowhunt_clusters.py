@@ -44,11 +44,14 @@ if api_key and len(api_key) == 36:
 
         for q in group_queries:
             q_intersections = api_instance.serp_cluster_get_query_intersections(workspace_id=workspace_id, serp_cluster_query_intersections_request=flowhunt.SerpClusterQueryIntersectionsRequest(query=q.query, group_id=group_id, live_mode=True, max_position=20))
-            intersections = json.loads(q_intersections.result)
-            for i in intersections:
-                source.append(q.query)
-                target.append(i["query"])
-                weight.append(i["count"])
+            if q_intersections.status == "SUCCESS":
+                intersections = json.loads(q_intersections.result)
+                for g in intersections:
+                    if g.group_id == group_id:
+                        for i in g.queries:
+                            source.append(q.query)
+                            target.append(i["query"])
+                            weight.append(i["count"])
 
         adjmat = vec2adjmat(source, target, weight=weight)
 
