@@ -248,7 +248,7 @@ function deleteKeywordsFromFlowHunt(GroupId, deleteKeywords) {
   }
   
   requests = []
-  removeGroupKeywords.forEach(function(keyword) {
+  deleteKeywords.forEach(function(keyword) {
     requests.push(
         {
           "query": keyword,
