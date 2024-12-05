@@ -258,7 +258,7 @@ function deleteKeywordsFromFlowHunt(GroupId, deleteKeywords) {
         }
       );
     });
-  callFlowHuntApi("/serp/cluster/" + GroupId + "/bulk_delete?workspace_id="+workspaceId, "POST", {"requests":removeGroupKeywords});
+  callFlowHuntApi("/serp/cluster/" + GroupId + "/bulk_delete?workspace_id="+workspaceId, "POST", {"requests":requests});
 }
 
 
