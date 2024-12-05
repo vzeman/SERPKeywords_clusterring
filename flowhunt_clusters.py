@@ -32,7 +32,7 @@ def get_intersections(api_client, workspace_id, group_id, group_queries):
             source, target, weight = process_requests(api_instance, workspace_id, group_id, requests, source, target, weight)
             requests = []
 
-    if requests:
+    if len(requests) > 0:
         source, target, weight = process_requests(api_instance, workspace_id, group_id, requests, source, target, weight)
 
     return source, target, weight
@@ -45,9 +45,10 @@ def process_requests(api_instance, workspace_id, group_id, requests, source, tar
             for g in intersections:
                 if g["group_id"] == group_id:
                     for query in g["queries"]:
-                        source.append(requests[i].query)
-                        target.append(query["query"])
-                        weight.append(query["count"])
+                        if requests[i].query != query["query"]:
+                            source.append(requests[i].query)
+                            target.append(query["query"])
+                            weight.append(query["count"])
     return source, target, weight
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
@@ -68,8 +69,7 @@ if api_key and len(api_key) == 36:
         with get_api_client(api_key) as api_client:
             group_queries = get_group_queries(api_client, workspace_id, group_id)
             source, target, weight = get_intersections(api_client, workspace_id, group_id, group_queries)
-
-        adjmat = vec2adjmat(source, target, weight=weight)
-        d3 = d3graph()
-        d3.graph(adjmat)
-        d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
+            adjmat = vec2adjmat(source=source, target=target, weight=weight)
+            d3 = d3graph()
+            d3.graph(adjmat)
+            d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
