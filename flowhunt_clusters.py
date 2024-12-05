@@ -1,9 +1,10 @@
 import json
-
 import flowhunt
 import streamlit as st
 from d3graph import vec2adjmat
 from streamlit_d3graph import d3graph
+from st_material_table import st_material_table
+import pandas as pd
 
 
 def get_api_client(api_key):
@@ -21,19 +22,33 @@ def get_group_queries(api_client, workspace_id, group_id):
     api_instance = flowhunt.SERPApi(api_client)
     return api_instance.search_cluster_query(workspace_id=workspace_id, group_id=group_id, serp_cluster_group_search_request=flowhunt.SerpClusterGroupSearchRequest())
 
-def get_intersections(api_client, workspace_id, group_id, group_queries):
+def get_intersections(api_client, workspace_id, group_id, group_queries, graph_placeholder):
     api_instance = flowhunt.SERPApi(api_client)
     source, target, weight = [], [], []
     requests = []
 
-    for q in group_queries:
+    progress_bar = st.progress(0)
+    total_queries = len(group_queries)
+    d3 = d3graph()
+
+    for idx, q in enumerate(group_queries):
         requests.append(flowhunt.SerpClusterQueryIntersectionsRequest(query=q.query, group_id=group_id, live_mode=True, max_position=20))
-        if len(requests) == 100:
+        if len(requests) == 30:
             source, target, weight = process_requests(api_instance, workspace_id, group_id, requests, source, target, weight)
             requests = []
+            adjmat = vec2adjmat(source=source, target=target, weight=weight)
+            d3.graph(adjmat)
+            with graph_placeholder:
+                d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
+            progress_bar.progress((idx + 1) / total_queries)
 
     if len(requests) > 0:
         source, target, weight = process_requests(api_instance, workspace_id, group_id, requests, source, target, weight)
+        adjmat = vec2adjmat(source=source, target=target, weight=weight)
+        d3.graph(adjmat)
+        with graph_placeholder:
+            d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
+        progress_bar.progress(1.0)
 
     return source, target, weight
 
@@ -68,8 +83,13 @@ if api_key and len(api_key) == 36:
         group_id = next(group.group_id for group in groups if group.group_name == selected_group)
         with get_api_client(api_key) as api_client:
             group_queries = get_group_queries(api_client, workspace_id, group_id)
-            source, target, weight = get_intersections(api_client, workspace_id, group_id, group_queries)
-            adjmat = vec2adjmat(source=source, target=target, weight=weight)
-            d3 = d3graph()
-            d3.graph(adjmat)
-            d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
+            tab1, tab2 = st.tabs(["Queries Table", "Graph of relationships"])
+
+            display_df = pd.DataFrame([q.query for q in group_queries])
+            with tab1:
+                _ = st_material_table(display_df)
+
+            with tab2:
+                with st.spinner("Computing intersections..."):
+                    graph_placeholder = st.empty()
+                    source, target, weight = get_intersections(api_client, workspace_id, group_id, group_queries, graph_placeholder)
