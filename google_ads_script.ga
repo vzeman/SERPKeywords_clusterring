@@ -1,0 +1,329 @@
+//Global variables
+var spreadsheetURL = ".......... GOOGLE SHEET URL HERE ...........";
+
+
+var spreadsheet;
+var sheetSettings; 
+var sheetAddedKW;
+var sheetNegativeKW;
+var apiKey;
+var labelName;
+var freezeLabel;
+var country;
+var language;
+var location;
+var urlsCount;
+var minimumMatch;
+var minMatchingQueries;
+var workspaceId;
+
+
+function main() {
+  spreadsheet = SpreadsheetApp.openByUrl(spreadsheetURL);
+  sheetSettings = spreadsheet.getSheetByName("Settings"); 
+  sheetAddedKW = spreadsheet.getSheetByName("AddedKW");
+  sheetNegativeKW = spreadsheet.getSheetByName("NegativeKW");
+  apiKey = getSettingValue("FlowHuntAPIkey")
+  labelName = getSettingValue("ProcessAdGroupLabelName")
+  freezeLabel = getSettingValue("FreezAdGroupClusterLabelName")
+  country = getSettingValue("CountryCode")
+  language = getSettingValue("LanguageCode")
+  location = getSettingValue("Location")
+  
+
+  urlsCount = getSettingValue("TopUrlsCount")
+  minimumMatch = getSettingValue("MinimumMatch")
+  minMatchingQueries = getSettingValue("MinMatchingQueiresInCluster")
+  workspaceId = getWorkspaceId()
+  
+  if (workspaceId.length < 10) {
+    Logger.log("Failed to load workspace id from FlowHunt, check API key");
+    return;
+  }
+  
+  Logger.log("FlowHunt WorkspaceId: " + workspaceId);
+  
+  if (addPositiveKWsToCluster() == 0) {
+    // Analyze new keywords just if all positive keywords added already
+    analyzeNotAssignedWords();
+  }
+}
+
+
+function analyzeNotAssignedWords() {
+  Logger.log("*** START Checking not assigned keywords");
+  
+  
+  // Iterate through all ad groups in the account
+  var adGroupsIterator = AdsApp.adGroups().get();
+  
+  while (adGroupsIterator.hasNext()) {
+    var adGroup = adGroupsIterator.next();
+    
+    var negativeKeywordsToDelete = [];
+    
+    if (!adGroup.isEnabled() || !adGroup.getCampaign().isEnabled()) {
+      continue;
+    }
+    var campaignName = adGroup.getCampaign().getId() + " - " + adGroup.getCampaign().getName();
+    var groupName = adGroup.getId() + " - " + adGroup.getName();
+    var groupId = adGroup.getId();
+    var freezePositiveInFlowHuntCluster = hasLabel(adGroup, freezeLabel);
+    if (hasLabel(adGroup, labelName)) {
+      
+      // Get the search terms for the current ad group ordered by clicks in the last 30 days
+      var searchTermsQuery = "SELECT Query FROM SEARCH_QUERY_PERFORMANCE_REPORT " +
+        "WHERE AdGroupId = " + adGroup.getId() +
+        " AND QueryTargetingStatus = \"NONE\" " +
+        "DURING TODAY";
+
+      var searchTermsIterator = AdsApp.report(searchTermsQuery).rows();
+      var adGroupKeywords = [];
+      while (searchTermsIterator.hasNext()) {
+        var searchTerm = searchTermsIterator.next();
+        var searchTermText = searchTerm["Query"].trim();
+        if (!isValidQuery(searchTermText)) {
+          Logger.log("Invalid search term in ad group '" + groupName + "': " + searchTermText);
+          continue;
+        }
+        var similarQueries = getSimilarQueries(groupId, groupName, searchTermText)
+        
+        if (similarQueries == null) {
+          Logger.log("!!! Something went wrong in api call for kw:" + searchTermText)
+          return;
+        }
+        var filteredSimilarQueries;
+        var anotherGroup = false;
+        if (similarQueries.length > 0 && similarQueries[0].group_id == groupId) {
+          filteredSimilarQueries = getFilteredSimilarQueries(similarQueries[0].queries);
+        } else {
+          if (similarQueries.length > 0) {
+            anotherGroup = true;
+          }
+          filteredSimilarQueries = [];
+        }
+        if (filteredSimilarQueries.length >= minMatchingQueries) {
+          if (freezePositiveInFlowHuntCluster) {
+              var rowData = [campaignName, groupName, searchTermText, new Date(), "ADGROUP IS FREEZED, MAYBE POSITIVE", JSON.stringify(filteredSimilarQueries).substring(0, 500)];
+              sheetAddedKW.appendRow(rowData);
+          } else {
+            var keywordOperation = adGroup.newKeywordBuilder().withText("[" + searchTermText + "]").build();
+            if (keywordOperation.isSuccessful()) {
+              adGroupKeywords.push(searchTermText);
+              var rowData = [campaignName, groupName, searchTermText, new Date(), "ADDING AS POSITIVE, REVIEW!", JSON.stringify(filteredSimilarQueries).substring(0, 500)];
+              sheetAddedKW.appendRow(rowData);
+            } else {
+              Logger.log("Failed to add keyword as positive:" + searchTermText)
+            }
+          }
+        } else {
+          // add to negative
+          adGroup.createNegativeKeyword("[" + searchTermText + "]");
+          negativeKeywordsToDelete.push(searchTermText);
+          Logger.log("Excluded search term in ad group '" + groupName + "': " + searchTermText);
+          var rowData;
+          if (anotherGroup) {
+            rowData =[campaignName, groupName, "[" + searchTermText + "]", new Date(), "Other Group is better", JSON.stringify(similarQueries).substring(0, 500)];
+          } else {
+            rowData =[campaignName, groupName, "[" + searchTermText + "]", new Date(), "Negative", JSON.stringify(similarQueries).substring(0, 500)];
+          }
+          sheetNegativeKW.appendRow(rowData);
+        }
+      }
+      if (adGroupKeywords.length > 0) {
+        //Add all keywords in the list to FlowHunt Cluster
+        addKeywordsToFlowHunt(groupName, groupId, adGroupKeywords);
+      }
+      if (negativeKeywordsToDelete.length > 0) {
+        deleteKeywordsFromFlowHunt(groupId, negativeKeywordsToDelete);
+      }
+    }
+  }
+  Logger.log("*** FINISHED Checking not assigned keywords");
+}
+
+function getSimilarQueries(groupId, groupName, query) {
+  result = callFlowHuntApi("/serp/cluster/query_intersections?workspace_id="+workspaceId, "POST", {
+    "query": query,
+    "country": country,
+    "language": language,
+    "location": location,
+    "group_id": groupId,
+    "live_mode": true,
+    "max_position": urlsCount
+  });
+  Logger.log(result)
+  if (result.status=="SUCCESS") {
+    return JSON.parse(result.result);
+  }
+  return null;
+}
+
+function getFilteredSimilarQueries(similarQueries) {
+  filtered = [];
+  for (var i=1; i<similarQueries.length; i++){
+    if (similarQueries[i].count>=minimumMatch) {
+      filtered.push(similarQueries[i]);
+    }
+  }
+  return filtered;
+}
+
+function addPositiveKWsToCluster() {
+  Logger.log("*** START Checking new campaign keywords");
+  // Iterate through all ad groups in the account
+  var adGroupsIterator = AdsApp.adGroups().get();
+  var processedKWs = sheetAddedKW.getDataRange().getValues();
+  var processedKWsMap = {};
+  var rowsAdded = 0;
+  
+  for (var i = 1; i < processedKWs.length; i++) { // Start at 1 to skip header row if exists
+    var groupName = processedKWs[i][1];
+    var keyword = processedKWs[i][2];
+    processedKWsMap[groupName + '|' + keyword] = true;
+  }
+  
+  
+  while (adGroupsIterator.hasNext()) {
+    var adGroup = adGroupsIterator.next();
+    if (!adGroup.isEnabled() || !adGroup.getCampaign().isEnabled()) {
+      continue;
+    }
+    var groupName = adGroup.getId() + " - " + adGroup.getName();
+    var campaignName = adGroup.getCampaign().getId() + " - " + adGroup.getCampaign().getName();
+    
+    if (hasLabel(adGroup, labelName)) {
+      var keywordsIterator = adGroup.keywords().get();
+      var adGroupKeywords = [];
+      while (keywordsIterator.hasNext()) {
+        var keyword = keywordsIterator.next();
+        if (keyword.isEnabled()) {
+          var key = groupName + '|' + keyword.getText();
+          if (!processedKWsMap[key]) {
+            adGroupKeywords.push(keyword.getText());
+            var rowData = [campaignName, groupName, keyword.getText(), new Date(), "Already present in campaign"];
+            sheetAddedKW.appendRow(rowData);
+            processedKWsMap[key] = true; 
+          }
+        }
+      }
+      if (adGroupKeywords.length > 0) {
+        //Add all keywords in the list to FlowHunt Cluster
+        addKeywordsToFlowHunt(groupName, adGroup.getId(), adGroupKeywords);
+      } else {
+        Logger.log("No new keywords in Group: " + groupName);
+      }
+      rowsAdded = rowsAdded + adGroupKeywords.length
+    }
+  }
+  Logger.log("*** FINISHED Checking new campaign keywords");
+  return rowsAdded;
+}
+
+
+function addKeywordsToFlowHunt(GroupName, GroupId, adGroupKeywords) {
+  if (!Array.isArray(adGroupKeywords)) {
+    return;
+  }
+  requests = []
+  adGroupKeywords.forEach(function(keyword) {
+    requests.push(
+        {
+          "query": keyword,
+          "country": country,
+          "language": language,
+          "location": location,
+          "group_name": GroupName,
+          "group_id": GroupId,
+          "count_urls": 30
+        }
+      );
+    });
+  callFlowHuntApi("/serp/cluster/add_queries?workspace_id="+workspaceId, "POST", {"requests":requests});
+}
+
+function deleteKeywordsFromFlowHunt(GroupId, deleteKeywords) {
+  if (!Array.isArray(deleteKeywords)) {
+    return;
+  }
+  
+  requests = []
+  removeGroupKeywords.forEach(function(keyword) {
+    requests.push(
+        {
+          "query": keyword,
+          "country": country,
+          "language": language,
+          "location": location,
+        }
+      );
+    });
+  callFlowHuntApi("/serp/cluster/" + GroupId + "/bulk_delete?workspace_id="+workspaceId, "POST", {"requests":removeGroupKeywords});
+}
+
+
+function getSettingValue(settingName) {
+    var data = sheetSettings.getDataRange().getValues();
+    for (var i = 0; i < data.length; i++) {
+        if (data[i][0] === settingName) {
+            return data[i][1];
+        }
+    }
+    return null;
+}
+  
+  
+function getWorkspaceId() {
+  result = callFlowHuntApi("/auth/me", "GET")
+  if (result !== null) {
+    return result.api_key_workspace_id;
+  }
+}
+
+
+function callFlowHuntApi(endpoint, method, requestBody) {
+    var url = "https://api.flowhunt.io/v2" + endpoint;
+    var headers = {
+        "Api-Key": apiKey,
+        "Content-Type": "application/json"
+    };
+    var options = {
+        "method" : method,  // or "post", "put", etc.
+        "headers" : headers,
+        "payload": JSON.stringify(requestBody)
+    };
+    
+    try {
+        var response = UrlFetchApp.fetch(url, options);
+        var responseData = JSON.parse(response.getContentText());
+        Logger.log(responseData);
+        return responseData;
+    } catch (e) {
+        Logger.log("An error occurred: " + e.message);
+    }
+    return null;
+}
+
+function hasLabel(adGroup, labelName) {
+  var labels = adGroup.labels().get();
+  while (labels.hasNext()) {
+    var label = labels.next();
+    if (label.getName() === labelName) {
+      Logger.log("Processing Adgroup " + adGroup.getName());
+      return true;
+    }
+  }
+  return false;
+}
+
+function isValidQuery(keyword) {
+  if (keyword.length > 80) {
+    return false;
+  }
+  const wordCount = keyword.split(/\s+/).length;
+  if (wordCount > 10) {
+    return false;
+  }
+
+  return true;
+}
