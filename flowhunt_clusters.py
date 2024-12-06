@@ -33,13 +33,13 @@ def get_intersections(api_client, workspace_id, group_id, group_queries, graph_p
 
     for idx, q in enumerate(group_queries):
         requests.append(flowhunt.SerpClusterQueryIntersectionsRequest(query=q.query, group_id=group_id, live_mode=True, max_position=20))
-        if len(requests) == 30:
+        if len(requests) == 50:
             source, target, weight = process_requests(api_instance, workspace_id, group_id, requests, source, target, weight)
             requests = []
             adjmat = vec2adjmat(source=source, target=target, weight=weight)
             d3.graph(adjmat)
             with graph_placeholder:
-                d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
+                d3.show(figsize=(1000, 600), title="Keyword Cluster for " + selected_group)
             progress_bar.progress((idx + 1) / total_queries)
 
     if len(requests) > 0:
@@ -47,7 +47,7 @@ def get_intersections(api_client, workspace_id, group_id, group_queries, graph_p
         adjmat = vec2adjmat(source=source, target=target, weight=weight)
         d3.graph(adjmat)
         with graph_placeholder:
-            d3.show(figsize=(1500, 1500), title="Keyword Cluster for " + selected_group)
+            d3.show(figsize=(1000, 600), title="Keyword Cluster for " + selected_group)
         progress_bar.progress(1.0)
 
     return source, target, weight
@@ -93,3 +93,42 @@ if api_key and len(api_key) == 36:
                 with st.spinner("Computing intersections..."):
                     graph_placeholder = st.empty()
                     source, target, weight = get_intersections(api_client, workspace_id, group_id, group_queries, graph_placeholder)
+
+# Add custom CSS and JavaScript for borders and responsive graph
+st.markdown(
+    """
+    <style>
+    .stTabs [role="tablist"] {
+        border: 2px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .stTabs [role="tabpanel"] {
+        border: 2px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+        height: 70vh; /* Set height to 70% of the viewport height */
+    }
+    .stGraph {
+        border: 2px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .stGraph > div {
+        width: 100% !important;
+        height: 100% !important;
+    }
+    </style>
+    <script>
+    function setTabHeight() {
+        const tabPanels = document.querySelectorAll('.stTabs [role="tabpanel"]');
+        tabPanels.forEach(panel => {
+            panel.style.height = (window.innerHeight * 0.7) + 'px';
+        });
+    }
+    window.addEventListener('resize', setTabHeight);
+    window.addEventListener('load', setTabHeight);
+    </script>
+    """,
+    unsafe_allow_html=True
+)
