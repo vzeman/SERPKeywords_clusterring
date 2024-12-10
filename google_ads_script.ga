@@ -51,23 +51,25 @@ function main() {
 
 
 function analyzeNotAssignedWords() {
-  Logger.log("*** START Checking not assigned keywords");
+  Logger.log("*** START analyzeNotAssignedWords - Checking not assigned keywords");
   
   
   // Iterate through all ad groups in the account
-  var adGroupsIterator = AdsApp.adGroups().get();
+  var adGroupsIterator = AdsApp.adGroups().withCondition("campaign.status = ENABLED").withCondition("ad_group.status = ENABLED").get();
   
   while (adGroupsIterator.hasNext()) {
     var adGroup = adGroupsIterator.next();
     
     var negativeKeywordsToDelete = [];
     
+    var groupId = adGroup.getId();
+    var campaignName = adGroup.getCampaign().getId() + " - " + adGroup.getCampaign().getName();
+    var groupName = groupId + " - " + adGroup.getName();
+
     if (!adGroup.isEnabled() || !adGroup.getCampaign().isEnabled()) {
+      Logger.log("-- AdGroup not enabled " + campaignName + " " + groupName);
       continue;
     }
-    var campaignName = adGroup.getCampaign().getId() + " - " + adGroup.getCampaign().getName();
-    var groupName = adGroup.getId() + " - " + adGroup.getName();
-    var groupId = adGroup.getId();
     var freezePositiveInFlowHuntCluster = hasLabel(adGroup, freezeLabel);
     if (hasLabel(adGroup, labelName)) {
       
@@ -137,6 +139,8 @@ function analyzeNotAssignedWords() {
       if (negativeKeywordsToDelete.length > 0) {
         deleteKeywordsFromFlowHunt(groupId, negativeKeywordsToDelete);
       }
+    } else {
+      Logger.log("-- AdGroup has no label " + campaignName + " " + groupName);
     }
   }
   Logger.log("*** FINISHED Checking not assigned keywords");
@@ -292,6 +296,8 @@ function callFlowHuntApi(endpoint, method, requestBody) {
         "headers" : headers,
         "payload": JSON.stringify(requestBody)
     };
+  
+    Logger.log("Sending Request (" + url + "):" + JSON.stringify(options));
     
     try {
         var response = UrlFetchApp.fetch(url, options);
