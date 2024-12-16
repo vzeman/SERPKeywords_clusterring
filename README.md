@@ -1,7 +1,7 @@
 # Automate Google Ads Negative Keywords
 
 ## Problem
-When you are running Google Ads campaigns, 
+When you are running Google Ads Search campaigns, 
 you need to add negative keywords to avoid showing your ads for irrelevant search queries.
 Even if you add exact match keywords to your ad group, you still need to add negative keywords because Google suggests your ads for similar search queries.
 It is very time-consuming to add negative keywords manually, especially when you have a lot of keywords in your ad group.
