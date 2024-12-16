@@ -1,7 +1,6 @@
 //Global variables
 var spreadsheetURL = ".......... GOOGLE SHEET URL HERE ...........";
 
-
 var spreadsheet;
 var sheetSettings; 
 var sheetAddedKW;
@@ -125,9 +124,9 @@ function analyzeNotAssignedWords() {
           Logger.log("Excluded search term in ad group '" + groupName + "': " + searchTermText);
           var rowData;
           if (anotherGroup) {
-            rowData =[campaignName, groupName, "[" + searchTermText + "]", new Date(), "Other Group is better", JSON.stringify(similarQueries).substring(0, 500)];
+            rowData =[campaignName, groupName, "[" + searchTermText + "]", new Date(), "Other Group is better", similarQueries[0].group_name, JSON.stringify(similarQueries).substring(0, 500)];
           } else {
-            rowData =[campaignName, groupName, "[" + searchTermText + "]", new Date(), "Negative", JSON.stringify(similarQueries).substring(0, 500)];
+            rowData =[campaignName, groupName, "[" + searchTermText + "]", new Date(), "Negative", "", JSON.stringify(similarQueries).substring(0, 500)];
           }
           sheetNegativeKW.appendRow(rowData);
         }
