@@ -34,7 +34,14 @@ function main() {
   minimumMatch = getSettingValue("MinimumMatch")
   minMatchingQueries = getSettingValue("MinMatchingQueiresInCluster")
   workspaceId = getWorkspaceId()
-  
+  var budget = getBudget();
+
+  if (budget < 10000) { // 1000 credits is the minimum amount to run the script (1 credit is 1/1000000 of a dollar)
+    Logger.log("STOP: No credits left in FlowHunt account");
+    return;
+  }
+  Logger.log("FlowHunt Budget: " + budget + " credits");
+
   if (workspaceId.length < 10) {
     Logger.log("Failed to load workspace id from FlowHunt, check API key");
     return;
@@ -281,6 +288,15 @@ function getWorkspaceId() {
   if (result !== null) {
     return result.api_key_workspace_id;
   }
+  return "";
+}
+
+function getBudget() {
+  budget = callFlowHuntApi("/credits/balance", "GET")
+  if (budget !== null) {
+    return budget.credits;
+  }
+  return 0;
 }
 
 
