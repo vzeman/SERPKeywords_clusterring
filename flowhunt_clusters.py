@@ -33,7 +33,7 @@ def get_intersections(api_client, workspace_id, group_id, group_queries, graph_p
 
     for idx, q in enumerate(group_queries):
         requests.append(flowhunt.SerpClusterQueryIntersectionsRequest(query=q.query, group_id=group_id, live_mode=True, max_position=20))
-        if len(requests) == 50:
+        if len(requests) == 10:
             source, target, weight = process_requests(api_instance, workspace_id, group_id, requests, source, target, weight)
             requests = []
             adjmat = vec2adjmat(source=source, target=target, weight=weight)
@@ -54,7 +54,7 @@ def get_intersections(api_client, workspace_id, group_id, group_queries, graph_p
 
 def process_requests(api_instance, workspace_id, group_id, requests, source, target, weight):
     try:
-        results = api_instance.serp_cluster_get_bulk_query_intersections(workspace_id=workspace_id, serp_cluster_query_intersections_request=requests)
+        results = api_instance.serp_cluster_get_bulk_query_intersections(workspace_id=workspace_id, serp_cluster_query_intersections_request=requests, _request_timeout=90)
         for i, r in enumerate(results):
             if r.status == "SUCCESS":
                 intersections = json.loads(r.result)
@@ -65,7 +65,7 @@ def process_requests(api_instance, workspace_id, group_id, requests, source, tar
                                 source.append(requests[i].query)
                                 target.append(query["query"])
                                 weight.append(query["count"])
-    except Exception:
+    except Exception as e:
         pass
     return source, target, weight
 
