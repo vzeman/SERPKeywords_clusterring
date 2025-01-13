@@ -53,17 +53,20 @@ def get_intersections(api_client, workspace_id, group_id, group_queries, graph_p
     return source, target, weight
 
 def process_requests(api_instance, workspace_id, group_id, requests, source, target, weight):
-    results = api_instance.serp_cluster_get_bulk_query_intersections(workspace_id=workspace_id, serp_cluster_query_intersections_request=requests)
-    for i, r in enumerate(results):
-        if r.status == "SUCCESS":
-            intersections = json.loads(r.result)
-            for g in intersections:
-                if g["group_id"] == group_id:
-                    for query in g["queries"]:
-                        if requests[i].query != query["query"]:
-                            source.append(requests[i].query)
-                            target.append(query["query"])
-                            weight.append(query["count"])
+    try:
+        results = api_instance.serp_cluster_get_bulk_query_intersections(workspace_id=workspace_id, serp_cluster_query_intersections_request=requests)
+        for i, r in enumerate(results):
+            if r.status == "SUCCESS":
+                intersections = json.loads(r.result)
+                for g in intersections:
+                    if g["group_id"] == group_id:
+                        for query in g["queries"]:
+                            if requests[i].query != query["query"]:
+                                source.append(requests[i].query)
+                                target.append(query["query"])
+                                weight.append(query["count"])
+    except Exception:
+        pass
     return source, target, weight
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
