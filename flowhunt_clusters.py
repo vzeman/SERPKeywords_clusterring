@@ -1,10 +1,12 @@
-import json
 import flowhunt
-import streamlit as st
-from d3graph import vec2adjmat
-from streamlit_d3graph import d3graph
-from st_material_table import st_material_table
+import flowhunt
+import networkx as nx
 import pandas as pd
+import streamlit as st
+from community import community_louvain
+from d3graph import vec2adjmat, adjmat2vec
+from st_material_table import st_material_table
+from streamlit_d3graph import d3graph
 
 
 def get_api_client(api_key):
@@ -46,24 +48,23 @@ def get_group_queries(api_client, workspace_id, customer_id, campaign_id, group_
         return None
 
 
-def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_id, group_queries, graph_placeholder):
+def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_id, group_queries):
     api_instance = flowhunt.SERPApi(api_client)
-    group_queries_arr = [q.keyword for q in group_queries]
     source =  [q.keyword for q in group_queries]
     target =  [q.keyword for q in group_queries]
     weight = [20 for q in group_queries]
-    d3 = d3graph()
+
 
     serp_cluster_group_intersections_request = flowhunt.SerpClusterGroupIntersectionsRequest(
         customer_id=customer_id,
         campaign_id=campaign_id,
         group_id=group_id,
-        min_cluster_strength=1,
-        suggest_other_matching_keywords=False
+        min_cluster_strength=3,
+        suggest_other_matching_keywords=True
     )
 
     try:
-        intersection = api_instance.serp_cluster_get_bulk_query_intersections(workspace_id, serp_cluster_group_intersections_request)
+        intersection = api_instance.serp_cluster_get_graph_nodes(workspace_id=workspace_id, serp_cluster_group_intersections_request=serp_cluster_group_intersections_request)
         for i in intersection:
             source.append(i.keyword_1)
             target.append(i.keyword_2)
@@ -71,13 +72,7 @@ def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_
     except Exception as e:
         pass
 
-    adjmat = vec2adjmat(source=source, target=target, weight=weight)
-    d3.graph(adjmat)
-
-    with graph_placeholder:
-        d3.show(figsize=(1000, 600), title="Keyword Cluster", save_button=False)
-
-    return
+    return vec2adjmat(source=source, target=target, weight=weight)
 
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
@@ -122,26 +117,46 @@ if api_key and len(api_key) == 36:
             if selected_group:
                 group_id = next(group.group_id for group in groups.groups if group.group_name == selected_group)
 
-    if campaign_id or group_id:
+    if customer_id or campaign_id or group_id:
         with get_api_client(api_key) as api_client:
             group_queries = get_group_queries(api_client, workspace_id, customer_id, campaign_id, group_id)
-            tab1, tab2 = st.tabs(["Queries Table", "Graph of relationships"])
+            tab2, tab3 = st.tabs(["Graph of relationships", "Keyword Clusters"])
 
             display_df = pd.DataFrame([q.keyword for q in group_queries])
             group_keywords = [q.keyword for q in group_queries]
-            with tab1:
-                _ = st_material_table(display_df)
+
+            adjmat = get_intersections(api_client=api_client,
+                                       workspace_id=workspace_id,
+                                       customer_id=customer_id,
+                                       campaign_id=campaign_id,
+                                       group_id=group_id,
+                                       group_queries=group_queries)
 
             with tab2:
                 with st.spinner("Computing intersections..."):
                     graph_placeholder = st.empty()
-                    get_intersections(api_client=api_client,
-                                                               workspace_id=workspace_id,
-                                                                 customer_id=customer_id,
-                                                                    campaign_id=campaign_id,
-                                                               group_id=group_id,
-                                                               group_queries=group_queries,
-                                                               graph_placeholder=graph_placeholder)
+                    d3 = d3graph()
+                    d3.graph(adjmat)
+                    with graph_placeholder:
+                        d3.show(figsize=(1000, 600), title="Keyword Cluster", save_button=False)
+
+
+            with tab3:
+                with st.spinner("Computing clusters..."):
+                    df = adjmat2vec(adjmat)
+                    G = nx.from_pandas_edgelist(df, edge_attr=True, create_using=nx.MultiGraph)
+                    # Partition
+                    G = G.to_undirected()
+                    cluster_labels = community_louvain.best_partition(G, weight='weight')
+                    clusters = {}
+                    for i, key in enumerate(cluster_labels.keys()):
+                        label = cluster_labels.get(key)
+                        if label in clusters:
+                            clusters[label] += "\n[" + key + "]"
+                        else:
+                            clusters[label] = "["+ key + "]"
+                    display_df = pd.DataFrame(clusters.values())
+                    _ = st_material_table(display_df)
 
 
 # Add custom CSS and JavaScript for borders and responsive graph

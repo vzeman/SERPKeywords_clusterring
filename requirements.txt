@@ -4,3 +4,5 @@ st_material_table
 git+https://github.com/QualityUnit/flowhunt-python-sdk.git
 scikit-learn
 pandas
+communities
+networkx
