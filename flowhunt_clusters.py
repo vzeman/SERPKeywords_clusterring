@@ -1,38 +1,38 @@
 import flowhunt
-import flowhunt
 import networkx as nx
 import pandas as pd
 import streamlit as st
 from community import community_louvain
 from d3graph import vec2adjmat, adjmat2vec
+from flowhunt import GoogleAdsCustomersSearchRequest, GoogleAdsCampaignsSearchRequest, GoogleAdsGroupsSearchRequest
 from st_material_table import st_material_table
 from streamlit_d3graph import d3graph
 
 
 def get_api_client(api_key):
-    #configuration = flowhunt.Configuration(host="http://localhost:9010", api_key={"APIKeyHeader": api_key})
-    configuration = flowhunt.Configuration(host="https://api.flowhunt.io", api_key={"APIKeyHeader": api_key})
+    configuration = flowhunt.Configuration(host="http://localhost:9010", api_key={"APIKeyHeader": api_key})
+    #configuration = flowhunt.Configuration(host="https://api.flowhunt.io", api_key={"APIKeyHeader": api_key})
     return flowhunt.ApiClient(configuration)
 
 def get_customers(api_client, workspace_id):
     api_instance = flowhunt.GoogleAdsApi(api_client)
     try:
-        return api_instance.get_google_ads_customers(workspace_id)
-    except Exception:
+        return api_instance.get_google_ads_customers(workspace_id=workspace_id, google_ads_customers_search_request=GoogleAdsCustomersSearchRequest())
+    except Exception as e:
         return None
 
 def get_campaigns(api_client, workspace_id, customer_id):
     api_instance = flowhunt.GoogleAdsApi(api_client)
     try:
-        return api_instance.get_google_ads_campaigns(customer_id, workspace_id)
-    except Exception:
+        return api_instance.get_google_ads_campaigns(workspace_id=workspace_id, google_ads_campaigns_search_request= GoogleAdsCampaignsSearchRequest(customer_id=customer_id))
+    except Exception as e:
         return None
 
 def get_groups(api_client, workspace_id, customer_id, campaign_id):
     api_instance = flowhunt.GoogleAdsApi(api_client)
     try:
-        return api_instance.get_google_ads_groups(customer_id, campaign_id, workspace_id)
-    except Exception:
+        return api_instance.get_google_ads_groups(workspace_id=workspace_id, google_ads_groups_search_request= GoogleAdsGroupsSearchRequest(customer_id=customer_id, campaign_id=campaign_id))
+    except Exception as e:
         return None
 
 def get_group_queries(api_client, workspace_id, customer_id, campaign_id, group_id):
@@ -44,7 +44,7 @@ def get_group_queries(api_client, workspace_id, customer_id, campaign_id, group_
     )
     try:
         return api_instance.search_cluster_query(workspace_id, serp_cluster_group_search_request)
-    except Exception:
+    except Exception as e:
         return None
 
 
@@ -59,7 +59,7 @@ def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_
         customer_id=customer_id,
         campaign_id=campaign_id,
         group_id=group_id,
-        min_cluster_strength=3,
+        min_cluster_strength=10,
         suggest_other_matching_keywords=True
     )
 
