@@ -48,7 +48,7 @@ def get_group_queries(api_client, workspace_id, customer_id, campaign_id, group_
         return None
 
 
-def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_id, group_queries):
+def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_id, group_queries, min_cluster_strength):
     api_instance = flowhunt.SERPApi(api_client)
     source =  [q.keyword for q in group_queries]
     target =  [q.keyword for q in group_queries]
@@ -59,7 +59,7 @@ def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_
         customer_id=customer_id,
         campaign_id=campaign_id,
         group_id=group_id,
-        min_cluster_strength=10,
+        min_cluster_strength=min_cluster_strength,
         suggest_other_matching_keywords=True
     )
 
@@ -78,6 +78,13 @@ def get_intersections(api_client, workspace_id, customer_id, campaign_id, group_
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
 with st.sidebar:
     api_key = st.text_input(label="FlowHunt API Key")
+    min_cluster_strength = st.number_input(
+        label="Minimum Cluster Strength",
+        min_value=1,
+        max_value=20,
+        value=7,
+        help="Adjust the minimum strength required for keyword relationships (1-20)"
+    )
 
 customer_id=None
 campaign_id=None
@@ -130,7 +137,8 @@ if api_key and len(api_key) == 36:
                                        customer_id=customer_id,
                                        campaign_id=campaign_id,
                                        group_id=group_id,
-                                       group_queries=group_queries)
+                                       group_queries=group_queries,
+                                       min_cluster_strength=min_cluster_strength)
 
             with tab2:
                 with st.spinner("Computing intersections..."):
